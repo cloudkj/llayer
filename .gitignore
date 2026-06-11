@@ -1,2 +1,2 @@
 .ollama/
-*.jsonl
+.llayer_history

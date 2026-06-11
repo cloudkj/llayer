@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-HISTORY_FILE=".llayer_history.jsonl"
+HISTORY_FILE=".llayer_history"
 
 if [ ! -f "$HISTORY_FILE" ]; then
     touch "$HISTORY_FILE"
