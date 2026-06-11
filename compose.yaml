@@ -1,0 +1,7 @@
+services:
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ./ollama:/root/.ollama
+    ports:
+      - "${PORT:-11434}:11434"
