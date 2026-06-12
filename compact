@@ -1,6 +1,12 @@
 #!/bin/sh
 set -euo pipefail
 
+# Require jq for JSON encoding
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "error: jq is required but not installed" >&2
+  exit 1
+fi
+
 # Convert newline-delimited JSON events from stdin into a compact message array.
 # Demonstrates three separate jq passes chained via pipes: parsing, reconstruction, and normalization.
 

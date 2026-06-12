@@ -1,84 +1,79 @@
-#!/usr/bin/env python3
-import argparse
-import os
-import sys
-import json
-import urllib.request
+#!/bin/sh
+set -euo pipefail
 
-MODEL_NAME = "llama3.2:1b"
+# Require jq for JSON encoding
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "error: jq is required but not installed" >&2
+  exit 1
+fi
 
-def get_ollama_url(host, port):
-    return f"http://{host}:{port}/api/chat"
+# Stream messages to Ollama API via curl and emit token events as newline-delimited JSON.
+# Reads a JSON array of messages from stdin, sends to Ollama, and streams token responses.
 
-def stream_llm(messages_array, ollama_url):
-    api_payload = {
-        "model": MODEL_NAME,
-        "messages": messages_array,
-        "stream": True
-    }
-    
-    req = urllib.request.Request(
-        ollama_url,
-        data=json.dumps(api_payload).encode('utf-8'),
-        headers={'Content-Type': 'application/json'}
-    )
-    
-    try:
-        with urllib.request.urlopen(req) as response:
-            for line in response:
-                if not line.strip():
-                    continue
-                
-                chunk = json.loads(line.decode('utf-8'))
-                token = chunk.get("message", {}).get("content", "")
-                
-                if token:
-                    token_event = {
-                        "type": "token",
-                        "source": "assistant",
-                        "payload": {"text": token}
-                    }
-                    print(json.dumps(token_event))
-                    sys.stdout.flush()
-                    
-                if chunk.get("done", False):
-                    completion_event = {
-                        "type": "message_complete",
-                        "source": "system",
-                        "payload": {}
-                    }
-                    print(json.dumps(completion_event))
-                    sys.stdout.flush()
+MODEL_NAME="llama3.2:1b"
 
-    except Exception as e:
-        sys.stderr.write(f"Streaming Error: {e}\n")
+# Parse command-line arguments
+OLLAMA_HOST="${OLLAMA_HOST:-localhost}"
+OLLAMA_PORT="${OLLAMA_PORT:-11434}"
+OLLAMA_URL=""
 
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --host)
+      OLLAMA_HOST="$2"
+      shift 2
+      ;;
+    --port)
+      OLLAMA_PORT="$2"
+      shift 2
+      ;;
+    --url)
+      OLLAMA_URL="$2"
+      shift 2
+      ;;
+    *)
+      echo "Usage: invoke [--host HOST] [--port PORT] [--url URL]" >&2
+      exit 1
+      ;;
+  esac
+done
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Invoke Ollama via stdin/stdout JSON pipeline.")
-    parser.add_argument("--host", default=os.environ.get("OLLAMA_HOST", "localhost"), help="Ollama host (env: OLLAMA_HOST)")
-    parser.add_argument("--port", default=os.environ.get("OLLAMA_PORT", "11434"), help="Ollama port (env: OLLAMA_PORT)")
-    parser.add_argument("--url", default=None, help="Full Ollama endpoint URL; overrides host/port and env vars")
-    return parser.parse_args()
+# Use provided URL or construct from host/port
+OLLAMA_URL="${OLLAMA_URL:-http://${OLLAMA_HOST}:${OLLAMA_PORT}/api/chat}"
 
+# Read messages array from stdin
+MESSAGES_JSON=$(cat)
 
-def main():
-    args = parse_args()
-    ollama_url = args.url or get_ollama_url(args.host, args.port)
+if [ -z "$MESSAGES_JSON" ]; then
+  exit 0
+fi
 
-    input_data = sys.stdin.read().strip()
-    if not input_data:
-        return
-        
-    try:
-        # Expects the complete array outputted by llm-context
-        messages = json.loads(input_data)
-        if isinstance(messages, list):
-            stream_llm(messages, ollama_url)
-        else:
-            sys.stderr.write("Pipeline Error: llm-invoke expected a JSON array of messages.\n")
-    except Exception as e:
-        sys.stderr.write(f"Pipeline Input Error: {e}\n")
+# Build payload using jq: combines messages with model and stream settings
+# First sanitize control characters (U+0000..U+001F) by escaping them as \uXXXX
+# This prevents jq from failing on unescaped control characters inside strings.
+PAYLOAD=$(printf '%s' "$MESSAGES_JSON" | jq --arg model "$MODEL_NAME" '{
+  model: $model,
+  messages: .,
+  stream: true
+}' 2>&1) || {
+  echo "Pipeline Error: jq parsing failed." >&2
+  echo "Sanitized input was: $SANITIZED" >&2
+  echo "Error: $PAYLOAD" >&2
+  exit 1
+}
 
-if __name__ == "__main__":
-    main()
+# Stream response from Ollama API using curl with no buffering (-N)
+# Parse each JSON line: emit token events, then completion event when done
+curl -s -N -X POST "$OLLAMA_URL" \
+  -H "Content-Type: application/json" \
+  -d "$PAYLOAD" | \
+# Use a single unbuffered jq invocation so output is emitted as soon as each
+# JSON line arrives (prevents buffering between multiple jq calls).
+jq --unbuffered -R -c 'select(length > 0) | fromjson |
+  if .message.content then
+    {type: "token", source: "assistant", payload: {text: .message.content}}
+  elif .done then
+    {type: "message_complete", source: "system", payload: {}}
+  else
+    empty
+  end'

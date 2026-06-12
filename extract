@@ -1,28 +1,29 @@
-#!/usr/bin/env python3
-import sys
-import json
+#!/bin/sh
+set -euo pipefail
 
-def main():
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-            
-            if event.get("type") == "token" and event.get("source") == "assistant":
-                sys.stdout.write(event["payload"]["text"])
-                sys.stdout.flush()
-                
-            elif event.get("type") == "message_complete":
-                sys.stdout.write("\n")
-                sys.stdout.flush()
-                
-            # Fallback in case it intercepts a non-streaming complete message
-            elif event.get("type") == "message" and event.get("source") == "assistant":
-                print(event["payload"]["text"])
-                
-        except Exception:
-            pass
+# Require jq for JSON encoding
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "error: jq is required but not installed" >&2
+  exit 1
+fi
 
-if __name__ == "__main__":
-    main()
+# Simple extractor: reads newline-delimited JSON events and writes assistant output.
+# - token events: append text (no newline)
+# - message_complete events: write a newline
+# - fallback: message events from assistant -> print payload.text with newline
+
+# Uses jq in raw-join mode so token strings are concatenated exactly as received.
+jq --unbuffered -R -r -j '
+    select(length > 0) |
+    try fromjson catch null |
+    select(. != null) |
+    if .type == "token" and .source == "assistant" then
+        .payload.text
+    elif .type == "message_complete" then
+        "\n"
+    elif .type == "message" and .source == "assistant" then
+        .payload.text, "\n"
+    else
+        empty
+    end
+'

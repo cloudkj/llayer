@@ -1,23 +1,17 @@
 #!/bin/sh
 set -eu
 
+# Require jq for JSON encoding
+if ! command -v jq >/dev/null 2>&1; then
+  printf '%s\n' "error: jq is required but not installed" >&2
+  exit 1
+fi
+
 input=$(cat)
 
 if [ -z "$input" ]; then
   exit 0
 fi
 
-escaped=$(printf '%s' "$input" | awk 'BEGIN {ORS=""; first=1}
-{
-  line = $0
-  gsub(/\\/, "\\\\", line)
-  gsub(/"/, "\\\"", line)
-  gsub(/\t/, "\\t", line)
-  gsub(/\r/, "\\r", line)
-  if (!first) printf "\\n"
-  first = 0
-  printf "%s", line
-}
-')
-
-printf '%s\n' '{"type":"message","source":"user","payload":{"text":"'"$escaped"'"}}'
+# Use jq to safely produce JSON with proper escaping
+printf '%s' "$input" | jq -c -Rs '{type: "message", source: "user", payload: {text: .}}'
