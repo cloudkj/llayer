@@ -1,7 +1,17 @@
-llayer - agents the Unix way
-============================
+llayer - AI agents the Unix way
+===============================
 
- `llayer` is a minimal implementation of an interactive AI agent that applies the Unix philosophy to model orchestration: small, single-purpose tools stitched together through pipes and textual interfaces to implement a REPL-style agent loop.
+This is a minimal implementation of an interactive AI agent that applies the Unix philosophy to model orchestration: small, single-purpose tools stitched together through pipes and textual interfaces to implement a REPL-style agent loop.
+
+Stateless Agent
+---------------
+
+A barebones, context-free/stateless interaction is simply a chain of command-line calls:
+
+```
+% echo "Hello, world!" | ./prompt | ./compact | ./invoke | ./extract 
+Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
+```
 
 Stateful Agent (REPL)
 ---------------------
@@ -37,8 +47,7 @@ graph LR
     style History fill:#676767,stroke:#333,stroke-width:2px
 ```
 
-The `agent` script combines all of the components to form a read-eval-print loop (REPL) that largely resembles
-modern agents:
+The `agent` script combines a few of the standalone components to form a read-eval-print loop (REPL) that largely resembles modern agents:
 
 1. `prompt`s for user input and appends a formatted event to the history file.
 2. `compact`s history to produce the model context and `invoke` to stream the model output.
@@ -52,20 +61,10 @@ Hello! It's nice to meet you. Is there something I can help you with or would yo
 We can have a conversation on any topic that interests you. What would you like to talk about?
 ```
 
-Stateless Agent
----------------
-
-A barebones, context-free/stateless interaction is simply a chain of command-line calls:
-
-```
-% echo "Hello, world!" | ./prompt | ./compact | ./invoke | ./extract 
-Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
-```
-
 Implementation
 --------------
 
-## Event Sourcing
+### Event Sourcing
 
 An append-only history file serves as the canonical state store. Each line is an event JSON object describing either a user input, a token emitted by the model, a completed message, or a tool call.
 
