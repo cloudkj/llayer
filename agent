@@ -2,6 +2,7 @@
 set -euo pipefail
 
 HISTORY_FILE=".llayer_history"
+LATEST_FILE=".llayer_latest"
 
 if [ ! -f "$HISTORY_FILE" ]; then
     touch "$HISTORY_FILE"
@@ -21,6 +22,9 @@ while true; do
 
     echo "$line" | ./prompt >> "$HISTORY_FILE"
 
-    cat "$HISTORY_FILE" | ./compact | ./invoke | tee -a "$HISTORY_FILE" | ./extract
-
+    cat "$HISTORY_FILE" | ./compact | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
+    
+    until cat "$LATEST_FILE" | ./tool >> "$HISTORY_FILE"; do
+        cat "$HISTORY_FILE" | ./compact | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
+    done
 done

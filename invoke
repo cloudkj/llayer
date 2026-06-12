@@ -98,9 +98,9 @@ def stream_ollama(
                     for tool_call in message.get("tool_calls", []):
                         if "function" in tool_call:
                             yield {
-                                "type": "tool_calls",
+                                "type": "tool_call",
                                 "source": "assistant",
-                                "payload": [tool_call["function"]]
+                                "payload": tool_call["function"]
                             }
                 elif "tool_result" in message:
                     tool_result = message["tool_result"]
@@ -161,6 +161,7 @@ def main() -> None:
     try:
         for event in stream_ollama(messages, ollama_url):
             print(json.dumps(event))
+            sys.stdout.flush() 
     except BrokenPipeError:
         sys.exit(0)
 

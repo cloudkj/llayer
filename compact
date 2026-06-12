@@ -72,7 +72,7 @@ def pass3_normalize_to_openai_format(
     Map each event to {role, content} format.
     """
     # Separate system and non-system events
-    system_events = [e for e in events if e.get("source") == "system" and e.get("type") == "message"]
+    system_events = [e for e in events if e.get("source") == "system"]
     non_system_events = [e for e in events if e.get("source") != "system"]
     
     # Keep last 10 non-system events
@@ -87,7 +87,7 @@ def pass3_normalize_to_openai_format(
         source = event.get("source", "user")
         
         # Validate role is one of the standard OpenAI roles
-        if source not in ("assistant", "user", "system"):
+        if source not in ("assistant", "user", "system", "tool"):
             source = "user"
         
         # Extract content, defaulting to string representation if payload.text missing
@@ -97,10 +97,13 @@ def pass3_normalize_to_openai_format(
         else:
             content = json.dumps(payload) if payload else ""
         
-        messages.append({
+        message = {
             "role": source,
             "content": content
-        })
+        }
+        if source == "tool":
+            message["tool_name"] = event.get("payload", {}).get("tool_name", "unknown_tool")
+        messages.append(message)
     
     return messages
 
