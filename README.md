@@ -3,9 +3,6 @@ llayer - AI agents the Unix way
 
 This is a minimal implementation of an interactive AI agent that applies the Unix philosophy to model orchestration: small, single-purpose tools stitched together through pipes and textual interfaces to implement a REPL-style agent loop.
 
-Stateless Agent
----------------
-
 A barebones, context-free/stateless interaction is simply a chain of command-line calls:
 
 ```
