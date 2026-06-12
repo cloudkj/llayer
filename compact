@@ -1,73 +1,134 @@
-#!/bin/sh
-set -euo pipefail
+#!/usr/bin/env python3
+"""
+Convert newline-delimited JSON events from stdin into a compact message array.
+Demonstrates three separate passes: parsing, reconstruction, and normalization.
+"""
 
-# Require jq for JSON encoding
-if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' "error: jq is required but not installed" >&2
-  exit 1
-fi
+import json
+import sys
+from typing import Any
 
-# Convert newline-delimited JSON events from stdin into a compact message array.
-# Demonstrates three separate jq passes chained via pipes: parsing, reconstruction, and normalization.
 
-# PASS 1: Parse raw input lines into JSON events
-# jq -R reads raw text lines, -s slurps all into one string, then split into lines
-# Filter out empty lines and invalid JSON, pipe to next pass
-jq -R -s '
-  split("\n")
-  | map(select(length > 0))
-  | map(try fromjson catch null)
-  | map(select(. != null))
-' | \
-# PASS 2: Reconstruct assistant messages from token stream
-# jq reduce accumulates state: token_buffer and reconstructed events array
-# Handles message/tool_call/tool_result events and reconstructs text from tokens
-jq -c '
-  reduce .[] as $event (
-    {reconstructed: [], token_buffer: ""};
-    if ($event.type == "message" or $event.type == "tool_call" or $event.type == "tool_result") then
-      .reconstructed += [$event]
-    elif ($event.type == "token" and $event.source == "assistant") then
-      .token_buffer += ($event.payload.text // "")
-    elif $event.type == "message_complete" then
-      if .token_buffer != "" then
-        .reconstructed += [{
-          type: "message",
-          source: "assistant",
-          payload: {text: .token_buffer}
-        }] |
-        .token_buffer = ""
-      else
-        .
-      end
-    else
-      .
-    end
-  )
-  | if .token_buffer != "" then
-      .reconstructed += [{
-        type: "message",
-        source: "assistant",
-        payload: {text: .token_buffer}
-      }]
-    else
-      .
-    end
-  | .reconstructed
-' | \
-# PASS 3: Select relevant events and normalize to OpenAI message format
-# Filter system events (all), then recent events (last 10 non-system)
-# Map each event to {role, content} format
-jq -c '
-  (
-    map(select(.source == "system" and .type == "message")) as $system_events |
-    (map(select(.source != "system")) | .[-10:]) as $recent_events |
-    ($system_events + $recent_events)
-  )
-  | map(
-      {
-        role: (if (.source | IN("assistant", "user", "system")) then .source else "user" end),
-        content: (.payload.text // tostring)
-      }
-    )
-'
+def pass1_parse_events(lines: list[str]) -> list[dict[str, Any]]:
+    """
+    PASS 1: Parse raw input lines into JSON events.
+    Filter out empty lines and invalid JSON.
+    """
+    events = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+            events.append(event)
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def pass2_reconstruct_messages(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    PASS 2: Reconstruct assistant messages from token stream.
+    Accumulates state: token_buffer and reconstructed events array.
+    Handles message/tool_call/tool_result events and reconstructs text from tokens.
+    """
+    reconstructed = []
+    token_buffer = ""
+    
+    for event in events:
+        event_type = event.get("type")
+        
+        if event_type in ("message", "tool_call", "tool_result"):
+            reconstructed.append(event)
+        elif event_type == "token" and event.get("source") == "assistant":
+            token_buffer += event.get("payload", {}).get("text", "")
+        elif event_type == "message_complete":
+            if token_buffer:
+                reconstructed.append({
+                    "type": "message",
+                    "source": "assistant",
+                    "payload": {"text": token_buffer}
+                })
+                token_buffer = ""
+    
+    # Handle any remaining token_buffer
+    if token_buffer:
+        reconstructed.append({
+            "type": "message",
+            "source": "assistant",
+            "payload": {"text": token_buffer}
+        })
+    
+    return reconstructed
+
+
+def pass3_normalize_to_openai_format(
+    events: list[dict[str, Any]]
+) -> list[dict[str, str]]:
+    """
+    PASS 3: Select relevant events and normalize to OpenAI message format.
+    Filter system events (all), then recent events (last 10 non-system).
+    Map each event to {role, content} format.
+    """
+    # Separate system and non-system events
+    system_events = [e for e in events if e.get("source") == "system" and e.get("type") == "message"]
+    non_system_events = [e for e in events if e.get("source") != "system"]
+    
+    # Keep last 10 non-system events
+    recent_events = non_system_events[-10:]
+    
+    # Combine: all system events + last 10 non-system
+    selected_events = system_events + recent_events
+    
+    # Normalize to OpenAI format
+    messages = []
+    for event in selected_events:
+        source = event.get("source", "user")
+        
+        # Validate role is one of the standard OpenAI roles
+        if source not in ("assistant", "user", "system"):
+            source = "user"
+        
+        # Extract content, defaulting to string representation if payload.text missing
+        payload = event.get("payload", {})
+        if isinstance(payload, dict) and "text" in payload:
+            content = payload["text"]
+        else:
+            content = json.dumps(payload) if payload else ""
+        
+        messages.append({
+            "role": source,
+            "content": content
+        })
+    
+    return messages
+
+
+def main() -> None:
+    """Main entry point."""
+    try:
+        input_data = sys.stdin.read()
+    except (KeyboardInterrupt, BrokenPipeError):
+        sys.exit(0)
+    
+    if not input_data.strip():
+        sys.exit(0)
+    
+    # Split into lines
+    lines = input_data.split("\n")
+    
+    # Execute the three passes
+    events = pass1_parse_events(lines)
+    reconstructed_events = pass2_reconstruct_messages(events)
+    messages = pass3_normalize_to_openai_format(reconstructed_events)
+    
+    # Output as JSON array
+    try:
+        print(json.dumps(messages))
+    except BrokenPipeError:
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

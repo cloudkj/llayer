@@ -1,79 +1,169 @@
-#!/bin/sh
-set -euo pipefail
+#!/usr/bin/env python3
+"""
+Stream messages to Ollama API via HTTP and emit token events as newline-delimited JSON.
+Reads a JSON array of messages from stdin, sends to Ollama, and streams token responses.
+"""
 
-# Require jq for JSON encoding
-if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' "error: jq is required but not installed" >&2
-  exit 1
-fi
+import json
+import sys
+import argparse
+import requests
+from typing import Generator, Any
 
-# Stream messages to Ollama API via curl and emit token events as newline-delimited JSON.
-# Reads a JSON array of messages from stdin, sends to Ollama, and streams token responses.
+MODEL_NAME = "llama3.2:1b"
 
-MODEL_NAME="llama3.2:1b"
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "list_directory",
+            "description": "Lists the files and folders inside a specified local directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The absolute or relative path to the directory to list. Use '.' for the current directory."
+                    }
+                },
+                "required": ["path"]
+            }
+        }
+    }
+]
 
-# Parse command-line arguments
-OLLAMA_HOST="${OLLAMA_HOST:-localhost}"
-OLLAMA_PORT="${OLLAMA_PORT:-11434}"
-OLLAMA_URL=""
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --host)
-      OLLAMA_HOST="$2"
-      shift 2
-      ;;
-    --port)
-      OLLAMA_PORT="$2"
-      shift 2
-      ;;
-    --url)
-      OLLAMA_URL="$2"
-      shift 2
-      ;;
-    *)
-      echo "Usage: invoke [--host HOST] [--port PORT] [--url URL]" >&2
-      exit 1
-      ;;
-  esac
-done
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Stream messages to Ollama API"
+    )
+    parser.add_argument(
+        "--host",
+        default="localhost",
+        help="Ollama host (default: localhost)"
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=11434,
+        help="Ollama port (default: 11434)"
+    )
+    parser.add_argument(
+        "--url",
+        help="Full Ollama API URL (overrides host/port)"
+    )
+    return parser.parse_args()
 
-# Use provided URL or construct from host/port
-OLLAMA_URL="${OLLAMA_URL:-http://${OLLAMA_HOST}:${OLLAMA_PORT}/api/chat}"
 
-# Read messages array from stdin
-MESSAGES_JSON=$(cat)
+def stream_ollama(
+    messages: list[dict[str, Any]],
+    ollama_url: str
+) -> Generator[dict[str, Any], None, None]:
+    """
+    Stream response from Ollama API and parse events.
+    
+    Yields event dicts with keys: type, source, payload
+    """
+    payload = {
+        "model": MODEL_NAME,
+        "messages": messages,
+        "stream": True,
+        "tools": TOOLS
+    }
+    
+    try:
+        response = requests.post(
+            ollama_url,
+            json=payload,
+            stream=True,
+            timeout=None
+        )
+        response.raise_for_status()
+        
+        for line in response.iter_lines():
+            if not line:
+                continue
+            
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            
+            # Parse response and emit events
+            if "message" in data:
+                message = data["message"]
+                
+                if "tool_calls" in message:
+                    for tool_call in message.get("tool_calls", []):
+                        if "function" in tool_call:
+                            yield {
+                                "type": "tool_calls",
+                                "source": "assistant",
+                                "payload": [tool_call["function"]]
+                            }
+                elif "tool_result" in message:
+                    tool_result = message["tool_result"]
+                    yield {
+                        "type": "tool_result",
+                        "source": "assistant",
+                        "payload": {
+                            "name": tool_result.get("name"),
+                            "result": tool_result.get("result")
+                        }
+                    }
+                elif "content" in message:
+                    yield {
+                        "type": "token",
+                        "source": "assistant",
+                        "payload": {"text": message["content"]}
+                    }
+            
+            if data.get("done"):
+                yield {
+                    "type": "message_complete",
+                    "source": "system",
+                    "payload": {}
+                }
+    
+    except requests.RequestException as e:
+        print(f"Error: Failed to connect to Ollama at {ollama_url}", file=sys.stderr)
+        print(f"Details: {e}", file=sys.stderr)
+        sys.exit(1)
 
-if [ -z "$MESSAGES_JSON" ]; then
-  exit 0
-fi
 
-# Build payload using jq: combines messages with model and stream settings
-# First sanitize control characters (U+0000..U+001F) by escaping them as \uXXXX
-# This prevents jq from failing on unescaped control characters inside strings.
-PAYLOAD=$(printf '%s' "$MESSAGES_JSON" | jq --arg model "$MODEL_NAME" '{
-  model: $model,
-  messages: .,
-  stream: true
-}' 2>&1) || {
-  echo "Pipeline Error: jq parsing failed." >&2
-  echo "Sanitized input was: $SANITIZED" >&2
-  echo "Error: $PAYLOAD" >&2
-  exit 1
-}
+def main() -> None:
+    """Main entry point."""
+    args = parse_args()
+    
+    # Construct URL
+    if args.url:
+        ollama_url = args.url
+    else:
+        ollama_url = f"http://{args.host}:{args.port}/api/chat"
+    
+    # Read messages from stdin
+    try:
+        messages_json = sys.stdin.read()
+    except (KeyboardInterrupt, BrokenPipeError):
+        sys.exit(0)
+    
+    if not messages_json.strip():
+        sys.exit(0)
+    
+    try:
+        messages = json.loads(messages_json)
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON input: {e}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Stream and output events
+    try:
+        for event in stream_ollama(messages, ollama_url):
+            print(json.dumps(event))
+    except BrokenPipeError:
+        sys.exit(0)
 
-# Stream response from Ollama API using curl with no buffering (-N)
-# Parse each JSON line: emit token events, then completion event when done
-curl -s -N -X POST "$OLLAMA_URL" \
-  -H "Content-Type: application/json" \
-  -d "$PAYLOAD" | \
-# Use a single unbuffered jq invocation so output is emitted as soon as each
-# JSON line arrives (prevents buffering between multiple jq calls).
-jq --unbuffered -R -c 'select(length > 0) | fromjson |
-  if .message.content then
-    {type: "token", source: "assistant", payload: {text: .message.content}}
-  elif .done then
-    {type: "message_complete", source: "system", payload: {}}
-  else
-    empty
-  end'
+
+if __name__ == "__main__":
+    main()
