@@ -1,21 +1,23 @@
-#!/usr/bin/env python3
-import sys
-import json
+#!/bin/sh
+set -eu
 
-def main():
-    user_input = sys.stdin.read().strip()
-    if not user_input:
-        return
+input=$(cat)
 
-    event = {
-        "type": "message",
-        "source": "user",
-        "payload": {
-            "text": user_input
-        }
-    }
-    
-    print(json.dumps(event))
+if [ -z "$input" ]; then
+  exit 0
+fi
 
-if __name__ == "__main__":
-    main()
+escaped=$(printf '%s' "$input" | awk 'BEGIN {ORS=""; first=1}
+{
+  line = $0
+  gsub(/\\/, "\\\\", line)
+  gsub(/"/, "\\\"", line)
+  gsub(/\t/, "\\t", line)
+  gsub(/\r/, "\\r", line)
+  if (!first) printf "\\n"
+  first = 0
+  printf "%s", line
+}
+')
+
+printf '%s\n' '{"type":"message","source":"user","payload":{"text":"'"$escaped"'"}}'
