@@ -1,60 +1,67 @@
-#!/usr/bin/env python3
-import sys
-import json
+#!/bin/sh
+set -euo pipefail
 
-def main():
-    reconstructed_events = []
-    current_token_buffer = ""
-    
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-            
-            if event.get("type") in ["message", "tool_call", "tool_result"]:
-                reconstructed_events.append(event)
-                
-            elif event.get("type") == "token" and event.get("source") == "assistant":
-                current_token_buffer += event.get("payload", {}).get("text", "")
-                
-            elif event.get("type") == "message_complete":
-                if current_token_buffer:
-                    reconstructed_events.append({
-                        "type": "message",
-                        "source": "assistant",
-                        "payload": {"text": current_token_buffer}
-                    })
-                    current_token_buffer = "" 
-                    
-        except Exception as e:
-            sys.stderr.write(f"Context Parser Error: {e}\n")
+# Convert newline-delimited JSON events from stdin into a compact message array.
+# Demonstrates three separate jq passes chained via pipes: parsing, reconstruction, and normalization.
 
-    if current_token_buffer:
-         reconstructed_events.append({
-             "type": "message",
-             "source": "assistant",
-             "payload": {"text": current_token_buffer}
-         })
-
-    if not reconstructed_events:
-        return
-
-    system_events = [e for e in reconstructed_events if e.get("source") == "system" and e.get("type") == "message"]
-    recent_events = [e for e in reconstructed_events if e.get("source") != "system"][-10:]
-    
-    messages = []
-    for e in (system_events + recent_events):
-        role = e["source"]
-        if role not in ["system", "user", "assistant"]:
-            role = "user" 
-            
-        messages.append({
-            "role": role,
-            "content": e["payload"].get("text", str(e["payload"]))
-        })
-
-    print(json.dumps(messages))
-
-if __name__ == "__main__":
-    main()
+# PASS 1: Parse raw input lines into JSON events
+# jq -R reads raw text lines, -s slurps all into one string, then split into lines
+# Filter out empty lines and invalid JSON, pipe to next pass
+jq -R -s '
+  split("\n")
+  | map(select(length > 0))
+  | map(try fromjson catch null)
+  | map(select(. != null))
+' | \
+# PASS 2: Reconstruct assistant messages from token stream
+# jq reduce accumulates state: token_buffer and reconstructed events array
+# Handles message/tool_call/tool_result events and reconstructs text from tokens
+jq -c '
+  reduce .[] as $event (
+    {reconstructed: [], token_buffer: ""};
+    if ($event.type == "message" or $event.type == "tool_call" or $event.type == "tool_result") then
+      .reconstructed += [$event]
+    elif ($event.type == "token" and $event.source == "assistant") then
+      .token_buffer += ($event.payload.text // "")
+    elif $event.type == "message_complete" then
+      if .token_buffer != "" then
+        .reconstructed += [{
+          type: "message",
+          source: "assistant",
+          payload: {text: .token_buffer}
+        }] |
+        .token_buffer = ""
+      else
+        .
+      end
+    else
+      .
+    end
+  )
+  | if .token_buffer != "" then
+      .reconstructed += [{
+        type: "message",
+        source: "assistant",
+        payload: {text: .token_buffer}
+      }]
+    else
+      .
+    end
+  | .reconstructed
+' | \
+# PASS 3: Select relevant events and normalize to OpenAI message format
+# Filter system events (all), then recent events (last 10 non-system)
+# Map each event to {role, content} format
+jq -c '
+  (
+    map(select(.source == "system" and .type == "message")) as $system_events |
+    (map(select(.source != "system")) | .[-10:]) as $recent_events |
+    ($system_events + $recent_events)
+  )
+  | map(
+      {
+        role: (if (.source | IN("assistant", "user", "system")) then .source else "user" end),
+        content: (.payload.text // tostring)
+      }
+    )
+'
