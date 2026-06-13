@@ -1,0 +1,21 @@
+[
+    {
+        "type": "function",
+        "function": {
+            "name": "list_directory",
+            "description": "Lists the files and folders inside a specified local directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The absolute or relative path to the directory to list. Use . for the current directory."
+                    }
+                },
+                "required": [
+                    "path"
+                ]
+            }
+        }
+    }
+]
