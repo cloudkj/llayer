@@ -20,11 +20,11 @@ while true; do
             ;;
     esac
 
-    echo "$line" | ./prompt >> "$HISTORY_FILE"
+    echo "$line" | ./observe >> "$HISTORY_FILE"
 
-    cat "$HISTORY_FILE" | ./compact | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
-    
-    until cat "$LATEST_FILE" | ./tool >> "$HISTORY_FILE"; do
-        cat "$HISTORY_FILE" | ./compact | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
+    cat "$HISTORY_FILE" | ./orient | ./decide | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
+
+    until cat "$LATEST_FILE" | ./invoke >> "$HISTORY_FILE"; do
+        cat "$HISTORY_FILE" | ./orient | ./decide | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
     done
 done
