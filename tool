@@ -1,52 +1,60 @@
-#!/usr/bin/env python3
-import sys
-import json
-import os
+#!/usr/bin/env sh
+set -euo pipefail
 
-def main():
-    tool_calls = 0
-    for line in sys.stdin:
-        if not line.strip():
-            continue
-        try:
-            event = json.loads(line)
-            
-            # Silently pass through everything that isn't a tool call
-            if event.get("type") != "tool_call":
-                continue
+list_directory() {
+  local line="$1"
+  local target_path
 
-            tool_calls += 1
-            call = event["payload"]
-            # Extract the tool details (assuming the payload matches Ollama's tool output format)
-            tool_name = call.get("name")
-            tool_args = call.get("arguments", {})
-            
-            if tool_name == "list_directory":
-                target_path = tool_args.get("parameters", {}).get("path", ".")
-                
-                try:
-                    # Safely list directory contents using Python's native OS library
-                    files = os.listdir(target_path)
-                    result_text = f"Contents of '{target_path}':\n" + "\n".join(files)
-                    
-                except Exception as e:
-                    result_text = f"Error reading directory '{target_path}': {str(e)}"
-                
-                # Emit the result back into the pipeline
-                result_event = {
-                    "type": "tool_result",
-                    "source": "tool",
-                    "payload": {
-                        "tool_name": tool_name,
-                        "text": result_text
-                    }
-                }
-                print(json.dumps(result_event))
-                
-        except Exception as e:
-            sys.stderr.write(f"Tool Exec Error: {e}\n")
+  target_path=$(printf '%s' "$line" | jq -r '.payload.arguments.parameters.path // "."')
+  if [ -z "$target_path" ]; then
+    target_path='.'
+  fi
 
-    return tool_calls
+  if list_output=$(ls -1 -- "$target_path" 2>&1); then
+    printf 'Contents of %s:\n%s' "$target_path" "$list_output"
+  else
+    printf 'Error reading directory %s: %s' "$target_path" "$list_output"
+  fi
+}
 
-if __name__ == "__main__":
-    sys.exit(main())
+dispatch() {
+  local tool_name="$1"
+  local line="$2"
+
+  case "$tool_name" in
+    list_directory)
+      list_directory "$line"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+tool_calls=0
+while IFS= read -r line; do
+  if [ -z "$(printf '%s' "$line" | tr -d '[:space:]')" ]; then
+    continue
+  fi
+
+  if ! printf '%s' "$line" | jq -e 'has("type") and .type == "tool_call"' >/dev/null 2>&1; then
+    continue
+  fi
+
+  tool_name=$(printf '%s' "$line" | jq -r '.payload.name // empty')
+  if [ -z "$tool_name" ]; then
+    continue
+  fi
+
+  if ! result_text=$(dispatch "$tool_name" "$line"); then
+    continue
+  fi
+
+  tool_calls=$((tool_calls + 1))
+  printf '%s\n' "$(
+    jq -nc --arg tool_name "$tool_name" --arg text "$result_text" \
+      '{type: "tool_result", source: "tool", payload: {tool_name: $tool_name, text: $text}}'
+  )"
+done
+
+exit "$tool_calls"
