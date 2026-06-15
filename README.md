@@ -6,7 +6,7 @@ This is a minimal implementation of an interactive AI agent that applies the Uni
 A barebones, stateless, and context-free interaction is simply a chain of command-line calls:
 
 ```
-% echo "Hello, world!" | ./observe | ./orient | ./decide | ./act
+% echo "Hello, world!" | ./prompt | ./compact | ./invoke | ./extract
 Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
 ```
 
