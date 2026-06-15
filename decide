@@ -12,12 +12,17 @@ if [ -z "$(printf '%s' "$MESSAGES_JSON" | tr -d '[:space:]')" ]; then
 exit 0
 fi
 
-# Build payload JSON
-PAYLOAD=$(printf '%s' "$MESSAGES_JSON" | jq -c --arg model "$MODEL_NAME" '
+# Build payload JSON, with tools specifications iff `--tools` flag enabled
+TOOLS_JSON="[]"
+if [ "${1:-}" = "--tools" ]; then
+  TOOLS_JSON=$(cat tools.json) || { printf '%s\n' "error: failed to read tools.json" >&2; exit 1; }
+fi
+PAYLOAD=$(printf '%s' "$MESSAGES_JSON" | jq -c --arg model "$MODEL_NAME" --argjson tools "$TOOLS_JSON" '
 {
     model: $model,
     messages: .,
-    stream: true
+    stream: true,
+    tools: $tools
 }
 ') || { printf '%s\n' "error: invalid JSON input" >&2; exit 1; }
 

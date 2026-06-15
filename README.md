@@ -3,10 +3,10 @@ llayer - AI agents the Unix way
 
 This is a minimal implementation of an interactive AI agent that applies the Unix philosophy to model orchestration: small, single-purpose tools stitched together through pipes and textual interfaces to implement a REPL-style agent loop.
 
-A barebones, context-free/stateless interaction is simply a chain of command-line calls:
+A barebones, stateless, and context-free interaction is simply a chain of command-line calls:
 
 ```
-% echo "Hello, world!" | ./prompt | ./compact | ./invoke | ./extract 
+% echo "Hello, world!" | ./observe | ./orient | ./decide | ./act
 Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
 ```
 

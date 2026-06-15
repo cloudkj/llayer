@@ -75,7 +75,19 @@ jq -c '
         ($system_events + $recent_events)
     )
     | map(
-            if .source == "tool" then
+            if .type == "tool_call" then
+                {
+                    role: "assistant",
+                    tool_calls: [{
+                        type: "function",
+                        function: {
+                            index: .payload.index,
+                            name: .payload.name,
+                            arguments: .payload.arguments
+                        }
+                    }]
+                }
+            elif .type == "tool_result" then
                 {
                     role: "tool",
                     content: (.payload.text // (.payload.result | tostring) // (.payload | tostring)),

@@ -13,18 +13,25 @@ while true; do
     if [ -z "$line" ]; then
         continue
     fi
+    USE_TOOLS=false
     case "$line" in
         exit|quit)
             echo "Goodbye."
             break
             ;;
+        /tools*)
+            USE_TOOLS=true
+            line="${line#/tools }"
+            ;;
     esac
 
     echo "$line" | ./observe >> "$HISTORY_FILE"
 
-    cat "$HISTORY_FILE" | ./orient | ./decide | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
+    DECIDE_ARGS=""
+    [ "$USE_TOOLS" = true ] && DECIDE_ARGS="--tools"
+    cat "$HISTORY_FILE" | ./orient | ./decide $DECIDE_ARGS | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
 
     until cat "$LATEST_FILE" | ./invoke >> "$HISTORY_FILE"; do
-        cat "$HISTORY_FILE" | ./orient | ./decide | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
+        cat "$HISTORY_FILE" | ./orient | ./decide | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
     done
 done

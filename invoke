@@ -22,7 +22,7 @@ def main():
             tool_args = call.get("arguments", {})
             
             if tool_name == "list_directory":
-                target_path = tool_args.get("path", ".")
+                target_path = tool_args.get("parameters", {}).get("path", ".")
                 
                 try:
                     # Safely list directory contents using Python's native OS library
