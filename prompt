@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# Parse optional --system flag
+# Determine the `source` of a generated message
 SOURCE="user"
 if [ "${1:-}" = "--system" ]; then
   SOURCE="system"

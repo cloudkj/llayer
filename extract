@@ -1,18 +1,11 @@
 #!/bin/sh
 set -euo pipefail
 
-# Require jq for JSON encoding
-if ! command -v jq >/dev/null 2>&1; then
-  printf '%s\n' "error: jq is required but not installed" >&2
-  exit 1
-fi
-
 # Simple extractor: reads newline-delimited JSON events and writes assistant output.
 # - token events: append text (no newline)
 # - message_complete events: write a newline
 # - fallback: message events from assistant -> print payload.text with newline
 
-# Uses jq in raw-join mode so token strings are concatenated exactly as received.
 jq --unbuffered -R -r -j '
     select(length > 0) |
     try fromjson catch null |

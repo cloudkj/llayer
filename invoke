@@ -27,22 +27,18 @@ PAYLOAD=$(printf '%s' "$MESSAGES_JSON" | jq -c --arg model "$MODEL_NAME" --argjs
 ') || { printf '%s\n' "error: invalid JSON input" >&2; exit 1; }
 
 # Send to Ollama and stream parsed events
-curl -sS -N -X POST "$OLLAMA_URL" \
+curl -s -N -X POST "$OLLAMA_URL" \
 -H "Content-Type: application/json" \
 -d "$PAYLOAD" | \
 jq --unbuffered -R -c '
 select(length > 0) | fromjson? |
-if .message then
-    if .message.tool_calls then
-        .message.tool_calls[] | {type: "tool_call", source: "assistant", payload: .function}
-    elif .message.content then
-        if .done == true then
-            {type: "message_complete", source: "system", payload: {}}
-        else
-            {type: "token", source: "assistant", payload: {text: .message.content}}
-        end
+if .message.tool_calls then
+    .message.tool_calls[] | {type: "tool_call", source: "assistant", payload: .function}
+elif .message.content then
+    if .done == true then
+        {type: "message_complete", source: "system", payload: {}}
     else
-        empty
+        {type: "token", source: "assistant", payload: {text: .message.content}}
     end
 else
     empty

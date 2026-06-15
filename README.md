@@ -73,12 +73,15 @@ Motivations:
 
 #### Schema
 
-We follow a small, explicit JSONL shape where each line contains a `type` and `payload`. Example events you will see in `history.jsonl`:
+We follow a small, explicit JSONL shape where each line contains a `type` and `payload`. The basic event schmea is
+as follows:
 
 ```json
-{"type": "message", "source": "user", "payload": {"text": "Hello"}}
-{"type": "token", "source": "assistant", "payload": {"text": "Hi"}}
-{"type": "message_complete", "source": "system", "payload": {}}
+{"type": "message",          "source": "user",      "payload": {"text": "..."}}
+{"type": "message_complete", "source": "system",    "payload": {}}
+{"type": "token",            "source": "assistant", "payload": {"text": "..."}}
+{"type": "tool_call",        "source": "assistant", "payload": {}}
+{"type": "tool_result",      "source": "tool",      "payload": {}}
 ```
 
 #### Compaction

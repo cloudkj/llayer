@@ -1,36 +1,39 @@
 #!/bin/sh
 set -euo pipefail
 
-# Require jq for JSON processing
-if ! command -v jq >/dev/null 2>&1; then
-    printf '%s\n' "error: jq is required but not installed" >&2
-    exit 1
-fi
+WINDOW_SIZE="10"
 
-#
-# compact - convert newline-delimited JSON events into a compact message array
-#
-# This script performs three clear passes implemented with jq:
-# 1) Parse raw input lines into a JSON array of events
-# 2) Reconstruct assistant messages from token events
-# 3) Select system messages and the last 10 non-system messages and
-#    normalize them to {role, content} pairs
-#
-# The output is a JSON array suitable for feeding into other tools.
-#
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --window)
+      if [ "$#" -lt 2 ]; then
+        printf '%s\n' "error: --window requires a value" >&2
+        exit 1
+      fi
+      WINDOW_SIZE="$2"
+      shift 2
+      ;;
+    --window=*)
+      WINDOW_SIZE="${1#*=}"
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
+# Process JSONL input
 jq -R -s '
-    # Split input into lines, drop empty lines, try to parse JSON per-line
     split("\n")
     | map(select(length > 0))
     | map(try fromjson catch null)
     | map(select(. != null))
 ' | \
 
+# Reconstruct messages from token stream. Maintain a token buffer while streaming assistant tokens and emit a message
+# after `message_complete` event is seen (or at the end).
 jq -c '
-    # Reconstruct messages from token stream. Maintain a token buffer while
-    # streaming assistant tokens and emit a message when a message_complete
-    # event is seen (or at the end).
     reduce .[] as $event (
         {reconstructed: [], token_buffer: ""};
         if ($event.type == "message" or $event.type == "tool_call" or $event.type == "tool_result") then
@@ -59,45 +62,42 @@ jq -c '
                 source: "assistant",
                 payload: {text: .token_buffer}
             }]
-        else
+      else
             .
-        end
+      end
     | .reconstructed
 ' | \
 
-jq -c '
-    # Select system messages (all) plus the last 10 non-system messages,
-    # then normalize each event to {role, content}. Handle tool events
-    # explicitly and include a tool_name field when present.
+# Select system messages (all) plus the last K non-system messages, then normalize each event as per chat format
+jq -c --argjson window_size "$WINDOW_SIZE" '
     (
         map(select(.source == "system" and .type == "message")) as $system_events |
-        (map(select(.source != "system")) | .[-10:]) as $recent_events |
+        (if $window_size == 0 then [] else map(select(.source != "system")) | .[-$window_size:] end) as $recent_events |
         ($system_events + $recent_events)
     )
-    | map(
-            if .type == "tool_call" then
-                {
-                    role: "assistant",
-                    tool_calls: [{
-                        type: "function",
-                        function: {
-                            index: .payload.index,
-                            name: .payload.name,
-                            arguments: .payload.arguments
-                        }
-                    }]
-                }
-            elif .type == "tool_result" then
-                {
-                    role: "tool",
-                    content: (.payload.text // (.payload.result | tostring) // (.payload | tostring)),
-                    tool_name: (.payload.tool_name // .payload.name // "unknown_tool")
-                }
-            else
-                {
-                    role: (if (.source | IN("assistant", "user", "system")) then .source else "user" end),
-                    content: (.payload.text // tostring)
-                }
-            end
-        )
+    | map(if .type == "tool_call" then
+            {
+                role: "assistant",
+                tool_calls: [{
+                    type: "function",
+                    function: {
+                        index: .payload.index,
+                        name: .payload.name,
+                        arguments: .payload.arguments
+                    }
+                }]
+            }
+          elif .type == "tool_result" then
+            {
+                role: "tool",
+                content: (.payload.text // (.payload.result | tostring) // (.payload | tostring)),
+                tool_name: (.payload.tool_name // .payload.name // "unknown_tool")
+            }
+          else
+            {
+                role: (if (.source | IN("assistant", "user", "system")) then .source else "user" end),
+                content: (.payload.text // tostring)
+            }
+          end
+    )
 '
