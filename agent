@@ -25,13 +25,13 @@ while true; do
             ;;
     esac
 
-    echo "$line" | ./observe >> "$HISTORY_FILE"
+    echo "$line" | ./prompt >> "$HISTORY_FILE"
 
     DECIDE_ARGS=""
     [ "$USE_TOOLS" = true ] && DECIDE_ARGS="--tools"
-    cat "$HISTORY_FILE" | ./orient | ./decide $DECIDE_ARGS | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
+    cat "$HISTORY_FILE" | ./compact | ./invoke $DECIDE_ARGS | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
 
-    until cat "$LATEST_FILE" | ./invoke >> "$HISTORY_FILE"; do
-        cat "$HISTORY_FILE" | ./orient | ./decide | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./act
+    until cat "$LATEST_FILE" | ./tool >> "$HISTORY_FILE"; do
+        cat "$HISTORY_FILE" | ./compact | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
     done
 done
