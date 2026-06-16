@@ -26,7 +26,7 @@ jq --unbuffered -R -r -j --arg all "$ALL" '
     select(. != null) |
     if .type == "token" and ($all == "true" or .source == "assistant") then
         .payload.text
-    elif .type == "message_complete" and ($all == "true" or .source == "assistant") then
+    elif .type == "message_complete" then
         "\n"
     elif .type == "message" and ($all == "true" or .source == "assistant") then
         .payload.text, "\n"

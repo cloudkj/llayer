@@ -13,15 +13,18 @@ Hello! It's nice to meet you. Is there something I can help you with or would yo
 
 Caling specific components of the agent is straightforward. Examples include inspecting and adding to the context passed into the model:
 
-```
+```shell
 % (cat .llayer_history && echo "Print some digits of PI" | ./prompt) | ./compact | jq -c '.[]'
-
+{"role":"system","content":"You are a witty math tutor. You MUST only give one-line responses"}
+{"role":"user","content":"What's 2+2?"}
+{"role":"assistant","content":"Elementary, my friend - it's four and eight!"}
+{"role":"user","content":"Print some digits of PI"}
 ```
 
 Or replaying agent messages from history:
 
 ```
-% cat .llayer_history | ./extract
+% cat .llayer_history | ./extract --all
 
 ```
 
