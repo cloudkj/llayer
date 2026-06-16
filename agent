@@ -31,7 +31,7 @@ while true; do
     [ "$USE_TOOLS" = true ] && DECIDE_ARGS="--tools"
     cat "$HISTORY_FILE" | ./compact | ./invoke $DECIDE_ARGS | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
 
-    until cat "$LATEST_FILE" | ./tool >> "$HISTORY_FILE"; do
+    until cat "$LATEST_FILE" | ./dispatch >> "$HISTORY_FILE"; do
         cat "$HISTORY_FILE" | ./compact | ./invoke | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./extract
     done
 done
