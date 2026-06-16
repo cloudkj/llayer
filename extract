@@ -1,20 +1,34 @@
 #!/bin/sh
 set -euo pipefail
 
-# Simple extractor: reads newline-delimited JSON events and writes assistant output.
-# - token events: append text (no newline)
-# - message_complete events: write a newline
-# - fallback: message events from assistant -> print payload.text with newline
+usage() {
+    cat <<'EOF' >&2
+Usage: extract [--all]
 
-jq --unbuffered -R -r -j '
+Options:
+  --all    Emit all input events unchanged (newline-delimited JSON)
+  -h, --help  Show this help
+EOF
+}
+
+ALL=false
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --all) ALL=true; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
+    esac
+done
+
+jq --unbuffered -R -r -j --arg all "$ALL" '
     select(length > 0) |
     try fromjson catch null |
     select(. != null) |
-    if .type == "token" and .source == "assistant" then
+    if .type == "token" and ($all == "true" or .source == "assistant") then
         .payload.text
-    elif .type == "message_complete" then
+    elif .type == "message_complete" and ($all == "true" or .source == "assistant") then
         "\n"
-    elif .type == "message" and .source == "assistant" then
+    elif .type == "message" and ($all == "true" or .source == "assistant") then
         .payload.text, "\n"
     else
         empty
