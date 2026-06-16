@@ -4,7 +4,15 @@ llayer - AI agents the Unix way
 This project applies the Unix philosophy to implementing an AI agent: model orchestration is done through a set of
 small, single-purpose tools stitched together through pipes and textual interfaces to produce a REPL-style agent loop.
 
-A stateless, and context-free interaction is simply a chain of command-line calls:
+To get started, start a local model server followed by the agent script:
+
+```shell
+% docker compose up
+% ./agent
+>
+```
+
+Alternatively, call the individual commands directly. For example, a stateless, context-free interaction is simply a chain of command-line calls:
 
 ```shell
 % echo "Hello, world!" | ./prompt | ./compact | ./invoke | ./extract
@@ -65,7 +73,9 @@ graph LR
 
     subgraph Eval
         invoke
+        dispatch
         Model
+        Tools
     end
 
     subgraph Print
@@ -77,44 +87,48 @@ graph LR
     History -->|pipe| compact
     compact -->|pipe| invoke
     invoke -->|append| History
+    invoke -->|pipe| dispatch
+    dispatch <-->|call|Tools
+    dispatch -->|append| History
     invoke -->|pipe| extract
     invoke <-->|http| Model
     extract -->|print| User
 
-    style History fill:#676767,stroke:#333,stroke-width:2px
+    style prompt fill:#4A90E2
+    style compact fill:#4A90E2
+    style invoke fill:#4A90E2
+    style dispatch fill:#4A90E2
+    style extract fill:#4A90E2
 ```
 
 The `agent` script combines the standalone components to form a read-eval-print loop (REPL) that largely resembles an AI agent:
 
-1. `prompt`s for user input and appends a corresponding event to the history file.
-2. `compact`s history to produce the model context and `invoke` the model.
-3. Append streamed events to history and `extract` the output to display to the user.
-4. If necessary, calls supported `tool`s and passes the result back to the model, and go back to step 2.
-
-```
-% ./agent           
-> Hello, world
-Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
-> Let's chat
-We can have a conversation on any topic that interests you. What would you like to talk about?
-```
+1. `prompt` for user input and append a corresponding event to the history file.
+2. `compact` history to produce the model context and `invoke` the model.
+3. If necessary, `dispatch` to supported tools and appends the result to the history, then repeat step 2.
+4. Append model output as events to history and `extract` and display user-facing messages.
 
 Implementation
 --------------
 
-### Event Sourcing
+### Append-Only State
 
-An append-only history file stores all of the state. Each line is an event JSON object describing either a user input, a token emitted by the model, a completed message, or a tool call/result.
-
-Motivations:
+An append-only history file stores all of the state. Each line is an event JSON object describing either a user input, a token emitted by the model, a completed message, or a tool call/result. Motivations and goals of this design:
 
 * Immutability: all events, down to individual tokens, are preserved for auditing, debugging, and replayability.
 * Simplicity: using append-only text to store state is robust and  aligns with the minimalist philosophy.
-* Composability: downstream tools can consume, filter, and transform the event stream without rewriting history.
+* Composability: downstream tools can consume, filter, and transform the event stream without modifying state.
 
-#### Schema
+#### Compaction
 
-We follow a small, explicit JSONL shape where each line contains a `type`, `source`, and `payload`. The basic event schema is
+`compact` implements lightweight compression on top of the canonical event history. Its main purposes are to be:
+
+- Scope-defining: the command filters history down to relevant events, groups tokens into higher-level messages, and applies configurable heuristics (e.g. keep last N turns, strip tool-call payloads, collapse tokens into a single assistant message) so the model receives concise context.
+- Non-destructive: the original history is never rewritten or deleted; the command produces a smaller, model-friendly sequence derived from events that fall within a user-defined window.
+
+### Schema
+
+The DSL follows small, explicit JSONL shapes where each line contains a `type`, `source`, and `payload`. The basic event schema is
 as follows:
 
 ```json
@@ -124,10 +138,3 @@ as follows:
 {"type": "tool_call",        "source": "assistant", "payload": {}}
 {"type": "tool_result",      "source": "tool",      "payload": {}}
 ```
-
-#### Compaction
-
-`compact` implements lightweight compression on top of the canonical event history. Its main purposes are to be:
-
-- Scope-defining: the command filters history down to relevant events, groups tokens into higher-level messages, and applies configurable heuristics (e.g. keep last N turns, strip tool-call payloads, collapse tokens into a single assistant message) so the model receives concise context.
-- Non-destructive: the original history is never rewritten or deleted; the command produces a smaller, model-friendly sequence derived from events that fall within a user-defined window.
