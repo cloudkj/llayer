@@ -42,8 +42,6 @@ while IFS=$'\t' read -r tool_name tool_arguments; do
         jq -nc --arg tool_name "$tool_name" --arg text "$result" \
           '{type: "tool_result", source: "tool", payload: {tool_name: $tool_name, text: $text}}'
     )"
-done < <(jq -r -s '
-    map(select(.type == "tool_call"))[] | [.payload.name, (.payload.arguments | @json)] | @tsv
-')
+done < <(jq -r -s 'map(select(.type == "tool_call"))[] | [.payload.name, (.payload.arguments | @json)] | @tsv')
 
 exit "$tool_calls"
