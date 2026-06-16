@@ -1,7 +1,7 @@
 #!/bin/sh
-set -eu
+set -euo pipefail
 
-# Determine the `source` of a generated message
+# Set the `source` of a generated message
 SOURCE="user"
 if [ "${1:-}" = "--system" ]; then
   SOURCE="system"
@@ -13,5 +13,4 @@ if [ -z "$input" ]; then
   exit 0
 fi
 
-# Use jq to safely produce JSON with proper escaping
 printf '%s' "$input" | jq -c -Rs --arg source "$SOURCE" '{type: "message", source: $source, payload: {text: .}}'

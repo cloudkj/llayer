@@ -6,7 +6,7 @@ usage() {
 Usage: extract [--all]
 
 Options:
-  --all    Emit all input events unchanged (newline-delimited JSON)
+  --all       Emit message events from all sources
   -h, --help  Show this help
 EOF
 }

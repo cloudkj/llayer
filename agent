@@ -16,7 +16,7 @@ while true; do
     USE_TOOLS=false
     case "$line" in
         exit|quit)
-            echo "Goodbye."
+            printf "Goodbye.\n"
             break
             ;;
         /tools*)
@@ -25,7 +25,7 @@ while true; do
             ;;
     esac
 
-    echo "$line" | ./prompt >> "$HISTORY_FILE"
+    printf '%s\n' "$line" | ./prompt >> "$HISTORY_FILE"
 
     DECIDE_ARGS=""
     [ "$USE_TOOLS" = true ] && DECIDE_ARGS="--tools"
