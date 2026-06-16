@@ -27,7 +27,7 @@ PAYLOAD=$(printf '%s' "$MESSAGES_JSON" | jq -c --arg model "$MODEL_NAME" --argjs
 ') || { printf '%s\n' "error: invalid JSON input" >&2; exit 1; }
 
 # Send to model and stream parsed events
-curl -s -N -X POST "$MODEL_ENDPOINT" \
+curl -sS -N -X POST "$MODEL_ENDPOINT" \
 -H "Content-Type: application/json" \
 -d "$PAYLOAD" | \
 jq --unbuffered -R -c '
