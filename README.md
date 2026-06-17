@@ -4,11 +4,11 @@ llayer - AI agents the Unix way
 This project applies the Unix philosophy to implementing an AI agent: model orchestration is done through a set of
 small, single-purpose tools stitched together through pipes and textual interfaces to produce a REPL-style agent loop.
 
-To get started, start a local model server (Ollama) with `docker compose up`, then invoke the individual commands. For
-example, a stateless, context-free interaction is simply a chain of command-line calls:
+To get started, run a local model server (Ollama) with `docker compose up` then invoke the individual commands. For
+example, a stateless, context-free call is simply a chain of command-line tools:
 
 ```shell
-% echo "Hello, world!" | ./prompt | ./compact | ./invoke | ./extract
+% echo "Hello, world!" | ./ll-read | ./ll-context | ./ll-eval | ./ll-print
 Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
 ```
 
@@ -24,7 +24,7 @@ How can I assist you tonight?
 Caling specific components of the agent is straightforward. Examples include inspecting and adding to the context passed into the model:
 
 ```shell
-% (cat .llayer_history && echo "Print some digits of PI" | ./prompt) | ./compact | jq -c '.[]'
+% (cat .llayer_history && echo "Print some digits of PI" | ./ll-read) | ./ll-context | jq -c '.[]'
 {"role":"system","content":"You are a witty math tutor. You MUST only give one-line responses"}
 {"role":"user","content":"What's 2+2?"}
 {"role":"assistant","content":"Elementary, my friend - it's four and eight!"}
@@ -34,7 +34,7 @@ Caling specific components of the agent is straightforward. Examples include ins
 Or replaying agent messages from history:
 
 ```shell
-% cat .llayer_history | ./extract --debug
+% cat .llayer_history | ./ll-print --debug
 [system] You are Super Mario. You must give one-line responses.
 [user] I'm hungry, want to get something to eat?
 "It's-a me, I'll power-up and grab some spaghetti at Toad's favorite restaurant!"
@@ -47,7 +47,7 @@ Or replaying agent messages from history:
 Or directly inspect streamed model outputs:
 
 ```shell
-% echo "ping! return pong a few times" | ./prompt | ./compact | ./invoke            
+% echo "ping! return pong a few times" | ./ll-read | ./ll-context | ./ll-eval            
 {"type":"token","source":"assistant","payload":{"text":"Ping"}}
 {"type":"token","source":"assistant","payload":{"text":"!"}}
 {"type":"token","source":"assistant","payload":{"text":" P"}}
@@ -59,7 +59,7 @@ Or directly inspect streamed model outputs:
 Or pipe to a downstream tool to measure how quickly the model is streaming responses back, and buffer all of the output before printing the responses:
 
 ```shell
-% echo "How much wood could a woodchuck chuck?" | ./prompt | ./compact | ./invoke | pv --line-mode | sponge | ./extract
+% echo "How much wood could a woodchuck chuck?" | ./ll-read | ./ll-context | ./ll-eval | pv --line-mode | sponge | ./ll-print
  427  0:00:37 [11.3 /s] 
 The classic tongue-twister! The answer, of course, is "a woodchuck would chuck as much wood as a woodchuck could chuck if a woodchuck could chuck wood." But let's have some fun with this...
 ```
@@ -71,48 +71,48 @@ Stateful Agent - REPL
 graph LR
     User
 
-    subgraph Read
-        prompt
+    subgraph READ
+        ll-read
         History
-        compact
+        ll-context
     end
 
-    subgraph Eval
-        invoke
-        dispatch
+    subgraph EVAL
+        ll-eval
+        ll-dispatch
         Model
         Tools
     end
 
-    subgraph Print
-        extract
+    subgraph PRINT
+        ll-print
     end
 
-    User -->|read| prompt
-    prompt -->|append| History
-    History -->|pipe| compact
-    compact -->|pipe| invoke
-    invoke -->|append| History
-    invoke -->|pipe| dispatch
-    dispatch <-->|call|Tools
-    dispatch -->|append| History
-    invoke -->|pipe| extract
-    invoke <-->|http| Model
-    extract -->|print| User
+    User -->|read| ll-read
+    ll-read -->|append| History
+    History -->|pipe| ll-context
+    ll-context -->|pipe| ll-eval
+    ll-eval -->|append| History
+    ll-eval -->|pipe| ll-dispatch
+    ll-dispatch <-->|call|Tools
+    ll-dispatch -->|append| History
+    ll-eval -->|pipe| ll-print
+    ll-eval <-->|http| Model
+    ll-print -->|print| User
 
-    style prompt fill:#4A90E2
-    style compact fill:#4A90E2
-    style invoke fill:#4A90E2
-    style dispatch fill:#4A90E2
-    style extract fill:#4A90E2
+    style ll-read fill:#4A90E2
+    style ll-context fill:#4A90E2
+    style ll-eval fill:#4A90E2
+    style ll-dispatch fill:#4A90E2
+    style ll-print fill:#4A90E2
 ```
 
 The `agent` script combines the standalone components to form a read-eval-print loop (REPL) that largely resembles an AI agent:
 
-1. `prompt` for user input and append a corresponding event to the history file.
-2. `compact` history to produce the model context and `invoke` the model.
-3. If necessary, `dispatch` to supported tools and appends the result to the history, then repeat step 2.
-4. Append model output as events to history and `extract` and display user-facing messages.
+1. `ll-read` user input and append a corresponding event to the history file.
+2. Build `ll-context` from history to produce the model context and `ll-eval` the model.
+3. If necessary, `ll-dispatch` to supported tools and append the result to the history; repeat step 2.
+4. Append model output as events to history then `ll-print` to display messages to the user.
 
 Implementation
 --------------
@@ -125,17 +125,16 @@ An append-only history file stores all of the state. Each line is an event JSON 
 * Simplicity: using append-only text to store state is robust and  aligns with the minimalist philosophy.
 * Composability: downstream tools can consume, filter, and transform the event stream without modifying state.
 
-#### Compaction
+### Context Building
 
-`compact` implements lightweight compression on top of the canonical event history. Its main purposes are to be:
+`ll-context` compacts the canonical event history to build the context for each model call. Its main purposes are:
 
-- Scope-defining: the command filters history down to relevant events, groups tokens into higher-level messages, and applies configurable heuristics (e.g. keep last N turns, strip tool-call payloads, collapse tokens into a single assistant message) so the model receives concise context.
-- Non-destructive: the original history is never rewritten or deleted; the command produces a smaller, model-friendly sequence derived from events that fall within a user-defined window.
+- Scoping: the command filters history down to relevant events, groups tokens into higher-level messages, and applies configurable heuristics (e.g. keep last N turns, strip tool-call payloads, collapse tokens into a single assistant message) so the model receives concise context.
+- Reduction: the original history is never rewritten or deleted; the command reduces the history down to a filtered, model-friendly sequence derived from events that fall within a user-defined window.
 
 ### Schema
 
-The DSL follows small, explicit JSONL shapes where each line contains a `type`, `source`, and `payload`. The basic event schema is
-as follows:
+The individual components utilize a DSL that follows minimal, explicit JSONL shapes where each line contains a `type`, `source`, and `payload`. The basic event schema is as follows:
 
 ```json
 {"type": "message",          "source": "user",      "payload": {"text": "..."}}
