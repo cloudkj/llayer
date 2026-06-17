@@ -7,7 +7,7 @@ Usage: ll-print [--debug]
 
 Options:
   --debug     Emit message events from all sources
-  -h, --help  Show this help
+  -h, --help  Show this message
 EOF
 }
 

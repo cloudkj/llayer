@@ -3,10 +3,10 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF' >&2
-Usage: ll-eval --model MODEL [--host HOST] [--port PORT] [--tools] [--dry-run]
+Usage: ll-eval [--model MODEL] [--host HOST] [--port PORT] [--tools] [--dry-run]
 
 Options:
-    --model NAME   Model name to request (required)
+    --model NAME   Model name to request (default: llama3.2:1b)
     --host HOST    Model server host (default: localhost)
     --port PORT    Model server port (default: 11434)
     --tools        Include tool specs from tools.json in the model payload
@@ -17,7 +17,7 @@ EOF
 
 HOST="localhost"
 PORT="11434"
-MODEL_NAME=""
+MODEL_NAME="${LLAYER_MODEL:-llama3.2:1b}"
 DRY_RUN=false
 TOOLS_JSON="[]"
 while [ "$#" -gt 0 ]; do

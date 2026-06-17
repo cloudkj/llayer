@@ -27,10 +27,9 @@ while true; do
 
     printf '%s\n' "$line" | ./ll-read >> "$HISTORY_FILE"
 
-    MODEL_ARG="--model llama3.2:1b"
     ENABLE_TOOLS=""
     [ "$USE_TOOLS" = true ] && ENABLE_TOOLS="--tools"
-    cat "$HISTORY_FILE" | ./ll-context | ./ll-eval $MODEL_ARG $ENABLE_TOOLS | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./ll-print
+    cat "$HISTORY_FILE" | ./ll-context | ./ll-eval $ENABLE_TOOLS | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./ll-print
 
     until cat "$LATEST_FILE" | ./ll-dispatch >> "$HISTORY_FILE"; do
         cat "$HISTORY_FILE" | ./ll-context | ./ll-eval | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | ./ll-print
