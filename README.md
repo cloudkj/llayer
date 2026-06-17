@@ -1,7 +1,7 @@
 llayer - AI agents the Unix way
 ===============================
 
-**The Journey to Dependency Zero Intelligence. Build AI agents with just `bash`, `curl`, and `jq`**
+**Dependency-Free AI agents built with just `bash`, `curl`, and `jq`**
 
 `llayer` is an experiment in applying the Unix philosophy to large language model orchestration. Everything is handled
 through a suite of small, single-purpose commands interfacing over standard text pipes to produce a REPL-style agent
