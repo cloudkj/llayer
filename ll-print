@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF' >&2
-Usage: extract [--debug]
+Usage: ll-print [--debug]
 
 Options:
   --debug     Emit message events from all sources

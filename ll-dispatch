@@ -45,4 +45,8 @@ while IFS=$'\t' read -r tool_name tool_arguments; do
     )"
 done < <(jq -r -s 'map(select(.type == "tool_call"))[] | [.payload.name, (.payload.arguments | @json)] | @tsv')
 
-exit "$tool_calls"
+if [ "$tool_calls" -gt 0 ]; then
+  exit 1
+else
+  exit 0
+fi
