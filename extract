@@ -3,33 +3,37 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF' >&2
-Usage: extract [--all]
+Usage: extract [--debug]
 
 Options:
-  --all       Emit message events from all sources
+  --debug     Emit message events from all sources
   -h, --help  Show this help
 EOF
 }
 
-ALL=false
+DEBUG=false
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --all) ALL=true; shift ;;
+        --debug) DEBUG=true; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 2 ;;
     esac
 done
 
-jq --unbuffered -R -r -j --arg all "$ALL" '
+jq --unbuffered -R -r -j --arg debug "$DEBUG" '
     select(length > 0) |
     try fromjson catch null |
     select(. != null) |
-    if .type == "token" and ($all == "true" or .source == "assistant") then
+    if .type == "token" and ($debug == "true" or .source == "assistant") then
         .payload.text
     elif .type == "message_complete" then
         "\n"
-    elif .type == "message" and ($all == "true" or .source == "assistant") then
-        .payload.text, "\n"
+    elif .type == "message" and ($debug == "true" or .source == "assistant") then
+        if $debug == "true" then
+            "[", (.source // ""), "] ", .payload.text,  "\n"
+        else
+            .payload.text, "\n"
+        end
     else
         empty
     end
