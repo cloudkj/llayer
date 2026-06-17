@@ -1,14 +1,28 @@
 llayer - AI agents the Unix way
 ===============================
 
-This project applies the Unix philosophy to implementing an AI agent: model orchestration is done through a set of
-small, single-purpose tools stitched together through pipes and textual interfaces to produce a REPL-style agent loop.
+**The Journey to Dependency Zero Intelligence. Build AI agents with just `bash`, `curl`, and `jq`**
+
+`llayer` is an experiment in applying the Unix philosophy to large language model orchestration. Everything is handled
+through a suite of small, single-purpose commands interfacing over standard text pipes to produce a REPL-style agent
+loop.
+
+Popular agent frameworks can be state-heavy and hard to reason about, making it difficult to audit and inspect the inputs and
+outputs at various stages. `llayer` aims to deconstruct the agent lifecycle into traditional Unix concepts while
+demystifying the internals into fundamentals:
+
+* **State and Memory**: an append-only history file (think `.bash_history`)
+* **Context Window**: a `jq` stream reducer
+* **Agent Loop**: a while loop in `bash`
+
+Quick Start
+-----------
 
 To get started, run a local model server (Ollama) with `docker compose up` then invoke the individual commands. For
 example, a stateless, context-free call is simply a chain of command-line tools:
 
 ```shell
-% echo "Hello, world!" | ./ll-read | ./ll-context | ./ll-eval | ./ll-print
+% echo "Hello, world" | ./ll-read | ./ll-context | ./ll-eval | ./ll-print
 Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
 ```
 
@@ -18,54 +32,10 @@ Alternatively, use the `agent` script for an interactive session:
 % ./agent 
 > Hello there, good evening.
 How can I assist you tonight?
-> 
 ```
 
-Caling specific components of the agent is straightforward. Examples include inspecting and adding to the context passed into the model:
-
-```shell
-% (cat .llayer_history && echo "Print some digits of PI" | ./ll-read) | ./ll-context | jq -c '.[]'
-{"role":"system","content":"You are a witty math tutor. You MUST only give one-line responses"}
-{"role":"user","content":"What's 2+2?"}
-{"role":"assistant","content":"Elementary, my friend - it's four and eight!"}
-{"role":"user","content":"Print some digits of PI"}
-```
-
-Or replaying agent messages from history:
-
-```shell
-% cat .llayer_history | ./ll-print --debug
-[system] You are Super Mario. You must give one-line responses.
-[user] I'm hungry, want to get something to eat?
-"It's-a me, I'll power-up and grab some spaghetti at Toad's favorite restaurant!"
-[user] How are we going to get there?
-"I'll just jump over a few Goombas on the way, we can be like mushrooms growing together!"
-[user] Sounds fun
-"Let's-a go, it's-a time for some Warp Pipes and a pipe-dream of delicious food!"
-```
-
-Or directly inspect streamed model outputs:
-
-```shell
-% echo "ping! return pong a few times" | ./ll-read | ./ll-context | ./ll-eval            
-{"type":"token","source":"assistant","payload":{"text":"Ping"}}
-{"type":"token","source":"assistant","payload":{"text":"!"}}
-{"type":"token","source":"assistant","payload":{"text":" P"}}
-{"type":"token","source":"assistant","payload":{"text":"ong"}}
-{"type":"token","source":"assistant","payload":{"text":"!"}}
-{"type":"message_complete","source":"system","payload":{}}
-```
-
-Or pipe to a downstream tool to measure how quickly the model is streaming responses back, and buffer all of the output before printing the responses:
-
-```shell
-% echo "How much wood could a woodchuck chuck?" | ./ll-read | ./ll-context | ./ll-eval | pv --line-mode | sponge | ./ll-print
- 427  0:00:37 [11.3 /s] 
-The classic tongue-twister! The answer, of course, is "a woodchuck would chuck as much wood as a woodchuck could chuck if a woodchuck could chuck wood." But let's have some fun with this...
-```
-
-Stateful Agent - REPL
----------------------
+The Stateful Agent: a REPL
+--------------------------
 
 ```mermaid
 graph LR
@@ -113,6 +83,33 @@ The `agent` script combines the standalone components to form a read-eval-print 
 2. Build `ll-context` from history to produce the model context and `ll-eval` the model.
 3. If necessary, `ll-dispatch` to supported tools and append the result to the history; repeat step 2.
 4. Append model output as events to history then `ll-print` to display messages to the user.
+
+The Power of Pipes
+------------------
+
+Caling specific components of the agent is straightforward. Examples include inspecting and adding to the context passed into the model:
+
+```shell
+(cat .llayer_history && echo "Print some digits of PI" | ./ll-read) | ./ll-context | jq -c '.[]'
+```
+
+Or replaying agent messages from history:
+
+```shell
+cat .llayer_history | ./ll-print --debug
+```
+
+Or directly inspect streamed model outputs:
+
+```shell
+echo "ping! just reply pong" | ./ll-read | ./ll-context | ./ll-eval            
+```
+
+Or pipe to a downstream tool to measure how quickly the model is streaming responses back, and buffer all of the output before printing the responses:
+
+```shell
+echo "How much wood could a woodchuck chuck?" | ./ll-read | ./ll-context | ./ll-eval | pv --line-mode | sponge | ./ll-print
+```
 
 Implementation
 --------------
