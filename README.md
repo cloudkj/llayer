@@ -4,19 +4,21 @@ llayer - AI agents the Unix way
 This project applies the Unix philosophy to implementing an AI agent: model orchestration is done through a set of
 small, single-purpose tools stitched together through pipes and textual interfaces to produce a REPL-style agent loop.
 
-To get started, start a local model server followed by the agent script:
-
-```shell
-% docker compose up
-% ./agent
->
-```
-
-Alternatively, call the individual commands directly. For example, a stateless, context-free interaction is simply a chain of command-line calls:
+To get started, start a local model server (Ollama) with `docker compose up`, then invoke the individual commands. For
+example, a stateless, context-free interaction is simply a chain of command-line calls:
 
 ```shell
 % echo "Hello, world!" | ./prompt | ./compact | ./invoke | ./extract
 Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
+```
+
+Alternatively, use the `agent` script for an interactive session:
+
+```shell
+% ./agent 
+> Hello there, good evening.
+How can I assist you tonight?
+> 
 ```
 
 Caling specific components of the agent is straightforward. Examples include inspecting and adding to the context passed into the model:
@@ -42,11 +44,15 @@ Or replaying agent messages from history:
 "Let's-a go, it's-a time for some Warp Pipes and a pipe-dream of delicious food!"
 ```
 
-Or directly inspect model outputs:
+Or directly inspect streamed model outputs:
 
 ```shell
-% echo "ping! just say pong" | ./prompt | ./compact | ./invoke
-{"type":"token","source":"assistant","payload":{"text":"pong"}}
+% echo "ping! return pong a few times" | ./prompt | ./compact | ./invoke            
+{"type":"token","source":"assistant","payload":{"text":"Ping"}}
+{"type":"token","source":"assistant","payload":{"text":"!"}}
+{"type":"token","source":"assistant","payload":{"text":" P"}}
+{"type":"token","source":"assistant","payload":{"text":"ong"}}
+{"type":"token","source":"assistant","payload":{"text":"!"}}
 {"type":"message_complete","source":"system","payload":{}}
 ```
 
