@@ -1,10 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed." >&2
-    exit 1
-fi
+for cmd in jq curl; do
+    if ! command -v $cmd &> /dev/null; then
+        echo "Error: $cmd is required but not installed." >&2
+        exit 1
+    fi
+done
 
 list_directory() {
   local line="$1"
@@ -40,6 +42,12 @@ print_file() {
   fi
 }
 
+fetch_url() {
+  local url=$(printf '%s' "$1" | jq -r '.url')
+  # Fetch, strip HTML tags, collapse spaces, and truncate to avoid blowing out context
+  curl -sL "$url" | sed -e 's/<[^>]*>//g' -e 's/^[ \t]*//;s/[ \t]*$//' | tr -s ' \n' ' ' | head -c 4096
+}
+
 dispatch() {
   local tool_name="$1"
   local tool_arguments="$2"
@@ -50,6 +58,9 @@ dispatch() {
       ;;
     print_file)
       print_file "$tool_arguments"
+      ;;
+    fetch_url)
+      fetch_url "$tool_arguments"
       ;;
     *)
       printf 'Unknown tool: %s\n' "$tool_name" >&2
