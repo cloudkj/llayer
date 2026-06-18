@@ -15,15 +15,20 @@ Options:
 EOF
 }
 
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+
 HOST="localhost"
 PORT="11434"
 MODEL_NAME="${LLAYER_MODEL:-llama3.2:1b}"
+
 DRY_RUN=false
+TOOLS_FILE="$DIR/tools.json"
 TOOLS_JSON="[]"
+
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --tools)
-            TOOLS_JSON=$(cat tools.json) || { printf '%s\n' "error: failed to read tools.json" >&2; exit 1; }
+            TOOLS_JSON=$(cat "$TOOLS_FILE") || { printf '%s\n' "error: failed to read tools.json" >&2; exit 1; }
             shift
             ;;
         --dry-run)
