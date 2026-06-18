@@ -5,15 +5,33 @@ list_directory() {
   local line="$1"
   local target_path
 
-  target_path=$(printf '%s' "$line" | jq -r '.path // "."')
+  target_path=$(printf '%s' "$line" | jq -r '.path')
   if [ -z "$target_path" ]; then
-    target_path='.'
+    printf 'Error: "path" argument is required for list_directory\n' >&2
+    return 1
   fi
 
   if list_output=$(ls -1 -- "$target_path" 2>&1); then
     printf 'Contents of %s:\n%s' "$target_path" "$list_output"
   else
-    printf 'Error reading directory %s: %s' "$target_path" "$list_output"
+    printf 'Error listing directory %s: %s' "$target_path" "$list_output"
+  fi
+}
+
+print_file() {
+  local line="$1"
+  local target_path
+
+  target_path=$(printf '%s' "$line" | jq -r '.path')
+  if [ -z "$target_path" ]; then
+    printf 'Error: "path" argument is required for print_file\n' >&2
+    return 1
+  fi
+
+  if file_output=$(cat -- "$target_path" 2>&1); then
+    printf 'Contents of %s:\n%s' "$target_path" "$file_output"
+  else
+    printf 'Error reading file %s: %s' "$target_path" "$file_output"
   fi
 }
 
@@ -24,6 +42,9 @@ dispatch() {
   case "$tool_name" in
     list_directory)
       list_directory "$tool_arguments"
+      ;;
+    print_file)
+      print_file "$tool_arguments"
       ;;
     *)
       printf 'Unknown tool: %s\n' "$tool_name" >&2
