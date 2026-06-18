@@ -1,10 +1,5 @@
-#!/bin/sh
+#!/bin/bash
 set -euo pipefail
-
-if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed." >&2
-    exit 1
-fi
 
 # Set the `source` of a generated message
 SOURCE="user"

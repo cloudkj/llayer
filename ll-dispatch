@@ -1,13 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-for cmd in jq curl; do
-    if ! command -v $cmd &> /dev/null; then
-        echo "Error: $cmd is required but not installed." >&2
-        exit 1
-    fi
-done
-
 list_directory() {
   local line="$1"
   local target_path
@@ -45,7 +38,7 @@ print_file() {
 fetch_url() {
   local url=$(printf '%s' "$1" | jq -r '.url')
   # Fetch, strip HTML tags, collapse spaces, and truncate to avoid blowing out context
-  curl -sL "$url" | sed -e 's/<[^>]*>//g' -e 's/^[ \t]*//;s/[ \t]*$//' | tr -s ' \n' ' ' | head -c 4096
+  curl -sL "$url" | sed -e 's/<[^>]*>//g' -e 's/^[ \t]*//;s/[ \t]*$//' | tr -s ' \n' ' ' | head -c 4096 || true
 }
 
 dispatch() {

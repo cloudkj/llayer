@@ -1,7 +1,7 @@
 llayer - AI agents the Unix way
 ===============================
 
-**Zero-dependency AI agents built with `bash`, `curl`, and `jq`**
+**Framework-free AI agents built with `bash`, `curl`, and `jq`**
 
 `llayer` is an experiment in applying the Unix philosophy to large language model orchestration. Everything is handled
 through a suite of small, single-purpose commands interfacing over standard text pipes to produce a REPL-style agent
@@ -18,9 +18,9 @@ Agent frameworks can be state-heavy and hard to reason about. `llayer` deconstru
 
 Because the entire architecture is a stateless text pipeline, it unlocks neat capabilities, such as:
 
-* ⏱️ **Time-Travel Debugging**: instantly rewind the agent's memory by simply slicing the history file (e.g., `head -n 20 .llayer_history`).
+* ⏱️ **Time-Travel Debugging**: instantly rewind the agent's memory by slicing the history file (e.g., `head -n 20 .llayer_history`).
 * 🛠️ **Zero Abstraction Tooling**: add tools using pure Bash functions where `stdout` directly becomes the agent's input.
-* 🚀 **Native Pipelining**: intercept the agent's stream with standard POSIX tools; filter PII data with `grep` before it hits the model, or natively benchmark token streaming speeds using `pv`.
+* 🚀 **Native Pipelining**: intercept the agent's stream with standard POSIX tools - e.g. filter PII data with `grep` before it hits the model, or natively benchmark token streaming speeds using `pv`.
 
 Quick Start
 -----------
@@ -91,8 +91,8 @@ The `agent` script combines the standalone components to form a read-eval-print 
 3. If necessary, `ll-dispatch` to supported tools and append the result to the history; repeat step 2.
 4. Append model output as events to history then `ll-print` to display messages to the user.
 
-The Power of Pipes
-------------------
+Power of Pipes
+--------------
 
 Caling specific components of the agent is straightforward. Examples include inspecting and adding to the context passed into the model:
 
