@@ -1,11 +1,6 @@
 #!/bin/sh
 set -euo pipefail
 
-if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed." >&2
-    exit 1
-fi
-
 WINDOW_SIZE="10"
 while [ "$#" -gt 0 ]; do
   case "$1" in

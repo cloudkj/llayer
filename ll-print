@@ -11,11 +11,6 @@ Options:
 EOF
 }
 
-if ! command -v jq &> /dev/null; then
-    echo "Error: jq is required but not installed." >&2
-    exit 1
-fi
-
 DEBUG=false
 while [ "$#" -gt 0 ]; do
     case "$1" in

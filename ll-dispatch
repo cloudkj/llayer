@@ -1,13 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-for cmd in jq curl; do
-    if ! command -v $cmd &> /dev/null; then
-        echo "Error: $cmd is required but not installed." >&2
-        exit 1
-    fi
-done
-
 list_directory() {
   local line="$1"
   local target_path
