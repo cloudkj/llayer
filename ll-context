@@ -1,8 +1,12 @@
 #!/bin/sh
 set -euo pipefail
 
-WINDOW_SIZE="10"
+if ! command -v jq &> /dev/null; then
+    echo "Error: jq is required but not installed." >&2
+    exit 1
+fi
 
+WINDOW_SIZE="10"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --window)
@@ -12,10 +16,6 @@ while [ "$#" -gt 0 ]; do
       fi
       WINDOW_SIZE="$2"
       shift 2
-      ;;
-    --window=*)
-      WINDOW_SIZE="${1#*=}"
-      shift
       ;;
     *)
       break
