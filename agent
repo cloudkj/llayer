@@ -5,15 +5,23 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 HISTORY_FILE=".llayer_history"
 LATEST_FILE=".llayer_latest"
 
+# Ensure model server is healthy
+"$DIR/ll-eval" --health-check || { exit 1; }
+
+# Initialize history file as needed
 if [ ! -f "$HISTORY_FILE" ]; then
     touch "$HISTORY_FILE"
 fi
 
+# Agent REPL
 while true; do
+    # Prompt for user input
     read -r -p "> " line
     if [ -z "$line" ]; then
         continue
     fi
+
+    # Handle switches and/or special case commands
     USE_TOOLS=false
     case "$line" in
         exit|quit)
@@ -26,12 +34,15 @@ while true; do
             ;;
     esac
 
+    # Process user input and update state
     printf '%s\n' "$line" | "$DIR/ll-read" >> "$HISTORY_FILE"
 
+    # Evaluate context + input
     ENABLE_TOOLS=""
     [ "$USE_TOOLS" = true ] && ENABLE_TOOLS="--tools"
     cat "$HISTORY_FILE" | "$DIR/ll-context" | "$DIR/ll-eval" $ENABLE_TOOLS | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | "$DIR/ll-print"
 
+    # Continuously handle tool calls if the latest interaction contains tool call events
     until cat "$LATEST_FILE" | "$DIR/ll-dispatch" >> "$HISTORY_FILE"; do
         cat "$HISTORY_FILE" | "$DIR/ll-context" | "$DIR/ll-eval" --tools | tee -a "$HISTORY_FILE" | tee "$LATEST_FILE" | "$DIR/ll-print"
     done

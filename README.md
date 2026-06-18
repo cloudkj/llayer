@@ -25,20 +25,23 @@ Because the entire architecture is a stateless text pipeline, it unlocks neat ca
 Quick Start
 -----------
 
-To get started, clone this repo and run `docker compose up` to start a local model server (Ollama), then try
-out the individual commands. For example, a stateless, context-free call is simply a chain of command-line tools:
+To get started: clone this repo, start a local model server (Ollama) with docker compose, then call `agent`:
+
+```shell
+% docker compose up --detach
+...
+ ✔ Container llayer-ollama-1 Started
+% ./agent 
+> Hello there, good morning 
+Good morning to you as well! How's your day starting out so far?
+```
+
+Alternatively, try out the individual commands. For example, a stateless, context-free call is simply a chain of
+commands:
 
 ```shell
 % echo "Hello, world" | ./ll-read | ./ll-context | ./ll-eval | ./ll-print
 Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
-```
-
-Alternatively, the `agent` wrapper script starts an interactive session:
-
-```shell
-% ./agent 
-> Hello there, good evening.
-How can I assist you tonight?
 ```
 
 The Stateful Agent: a REPL
@@ -141,6 +144,7 @@ An append-only history file stores all of the state. Each line is an event JSON 
 The individual components utilize a DSL that follows minimal, explicit JSONL shapes where each line contains a `type`, `source`, and `payload`. The basic event schema is as follows:
 
 ```json
+{"type": "error",            "source":"system",     "payload": {"test": "..."}}
 {"type": "message",          "source": "user",      "payload": {"text": "..."}}
 {"type": "message_complete", "source": "system",    "payload": {}}
 {"type": "token",            "source": "assistant", "payload": {"text": "..."}}

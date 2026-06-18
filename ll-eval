@@ -3,15 +3,16 @@ set -euo pipefail
 
 usage() {
     cat <<'EOF' >&2
-Usage: ll-eval [--model MODEL] [--host HOST] [--port PORT] [--tools] [--dry-run]
+Usage: ll-eval [--model MODEL] [--host HOST] [--port PORT] [--tools] [--dry-run] [--health-check]
 
 Options:
-    --model NAME   Model name to request (default: llama3.2:1b)
-    --host HOST    Model server host (default: localhost)
-    --port PORT    Model server port (default: 11434)
-    --tools        Include tool specs from tools.json in the model payload
-    --dry-run      Print the model payload only
-    -h, --help     Show this message
+    --model NAME       Model name to request (default: llama3.2:1b)
+    --host HOST        Model server host (default: localhost)
+    --port PORT        Model server port (default: 11434)
+    --tools            Include tool specs from tools.json in the model payload
+    --dry-run          Print the model payload only
+    --health-check     Health check for model server
+    -h, --help         Show this message
 EOF
 }
 
@@ -22,6 +23,7 @@ PORT="11434"
 MODEL_NAME="${LLAYER_MODEL:-llama3.2:1b}"
 
 DRY_RUN=false
+HEALTH_CHECK=false
 TOOLS_FILE="$DIR/tools.json"
 TOOLS_JSON="[]"
 
@@ -33,6 +35,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --dry-run)
             DRY_RUN=true
+            shift
+            ;;
+        --health-check)
+            HEALTH_CHECK=true
             shift
             ;;
         --host)
@@ -63,6 +69,24 @@ if [ -z "${MODEL_NAME}" ]; then
     exit 2
 fi
 
+if [ "$HEALTH_CHECK" = "true" ]; then
+    HEALTH_CHECK_URL="http://${HOST}:${PORT}/"
+    set +e
+    HTTP_STATUS=$(curl -sS -o /dev/null -w "%{http_code}" "$HEALTH_CHECK_URL")
+    CURL_EXIT=$?
+    set -e
+    if [ "$CURL_EXIT" -ne 0 ]; then
+        printf '%s\n' "error: model server health check failed (return=$CURL_EXIT)" >&2
+        exit 1
+    fi
+    if [ "$HTTP_STATUS" = "200" ]; then
+        exit 0
+    else
+        printf '%s\n' "error: model server health check failed (status=$HTTP_STATUS)" >&2
+        exit 1
+    fi
+fi
+
 # Read messages from stdin
 MESSAGES_JSON=$(cat) || { printf '%s\n' "error: failed to read stdin" >&2; exit 1; }
 if [ -z "$(printf '%s' "$MESSAGES_JSON" | tr -d '[:space:]')" ]; then
@@ -91,7 +115,9 @@ curl -sS -N -X POST "$MODEL_ENDPOINT" \
 -d "$PAYLOAD" | \
 jq --unbuffered -R -c '
 select(length > 0) | fromjson? |
-if .message.tool_calls then
+if .error then
+    {type: "error", source: "system", payload: {text: .error}}
+elif .message.tool_calls then
     .message.tool_calls[] | {type: "tool_call", source: "assistant", payload: .function}
 elif .message.content then
     if .done == true then
