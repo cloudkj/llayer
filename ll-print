@@ -35,7 +35,7 @@ jq --unbuffered -R -r -j --arg debug "$DEBUG" '
             .payload.text, "\n"
         end
     elif .type == "error" then
-        "Error: ", .payload.message, "\n"
+        "Error: ", .payload.text, "\n"
     else
         empty
     end

@@ -116,7 +116,7 @@ curl -sS -N -X POST "$MODEL_ENDPOINT" \
 jq --unbuffered -R -c '
 select(length > 0) | fromjson? |
 if .error then
-    {type: "error", source: "system", payload: {message: .error}}
+    {type: "error", source: "system", payload: {text: .error}}
 elif .message.tool_calls then
     .message.tool_calls[] | {type: "tool_call", source: "assistant", payload: .function}
 elif .message.content then
