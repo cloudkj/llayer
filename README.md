@@ -1,32 +1,39 @@
 llayer - AI agents the Unix way
 ===============================
 
-**Dependency-Free AI agents built with just `bash`, `curl`, and `jq`**
+**Zero-dependency AI agents built with `bash`, `curl`, and `jq`**
 
 `llayer` is an experiment in applying the Unix philosophy to large language model orchestration. Everything is handled
 through a suite of small, single-purpose commands interfacing over standard text pipes to produce a REPL-style agent
 loop.
 
-Popular agent frameworks can be state-heavy and hard to reason about, making it difficult to audit and inspect the inputs and
-outputs at various stages. `llayer` aims to deconstruct the agent lifecycle into traditional Unix concepts while
-demystifying the internals into fundamentals:
+Why?
+----
 
-* **State and Memory**: an append-only history file (think `.bash_history`)
-* **Context Window**: a `jq` stream reducer
-* **Agent Loop**: a while loop in `bash`
+Agent frameworks can be state-heavy and hard to reason about. `llayer` deconstructs the agent lifecycle into fundamentals:
+
+* **State & Memory**: An append-only `.jsonl` history file (like `.bash_history`).
+* **Context Window**: A functional `jq` stream reducer.
+* **Agent Loop**: A standard `bash` while loop.
+
+Because the entire architecture is a stateless text pipeline, it unlocks neat capabilities, such as:
+
+* ⏱️ **Time-Travel Debugging**: instantly rewind the agent's memory by simply slicing the history file (e.g., `head -n 20 .llayer_history`).
+* 🛠️ **Zero Abstraction Tooling**: add tools using pure Bash functions where `stdout` directly becomes the agent's input.
+* 🚀 **Native Pipelining**: intercept the agent's stream with standard POSIX tools; filter PII data with `grep` before it hits the model, or natively benchmark token streaming speeds using `pv`.
 
 Quick Start
 -----------
 
-To get started, run a local model server (Ollama) with `docker compose up` then invoke the individual commands. For
-example, a stateless, context-free call is simply a chain of command-line tools:
+To get started, clone this repo and run `docker compose up` to start a local model server (Ollama), then try
+out the individual commands. For example, a stateless, context-free call is simply a chain of command-line tools:
 
 ```shell
 % echo "Hello, world" | ./ll-read | ./ll-context | ./ll-eval | ./ll-print
 Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?
 ```
 
-Alternatively, use the `agent` script for an interactive session:
+Alternatively, the `agent` wrapper script starts an interactive session:
 
 ```shell
 % ./agent 

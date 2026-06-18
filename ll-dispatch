@@ -1,20 +1,51 @@
 #!/bin/bash
 set -euo pipefail
 
+for cmd in jq curl; do
+    if ! command -v $cmd &> /dev/null; then
+        echo "Error: $cmd is required but not installed." >&2
+        exit 1
+    fi
+done
+
 list_directory() {
   local line="$1"
   local target_path
 
-  target_path=$(printf '%s' "$line" | jq -r '.path // "."')
+  target_path=$(printf '%s' "$line" | jq -r '.path')
   if [ -z "$target_path" ]; then
-    target_path='.'
+    printf 'Error: "path" argument is required for list_directory\n' >&2
+    return 1
   fi
 
   if list_output=$(ls -1 -- "$target_path" 2>&1); then
     printf 'Contents of %s:\n%s' "$target_path" "$list_output"
   else
-    printf 'Error reading directory %s: %s' "$target_path" "$list_output"
+    printf 'Error listing directory %s: %s' "$target_path" "$list_output"
   fi
+}
+
+print_file() {
+  local line="$1"
+  local target_path
+
+  target_path=$(printf '%s' "$line" | jq -r '.path')
+  if [ -z "$target_path" ]; then
+    printf 'Error: "path" argument is required for print_file\n' >&2
+    return 1
+  fi
+
+  if file_output=$(cat -- "$target_path" 2>&1); then
+    printf 'Contents of %s:\n%s' "$target_path" "$file_output"
+  else
+    printf 'Error reading file %s: %s' "$target_path" "$file_output"
+  fi
+}
+
+fetch_url() {
+  local url=$(printf '%s' "$1" | jq -r '.url')
+  # Fetch, strip HTML tags, collapse spaces, and truncate to avoid blowing out context
+  curl -sL "$url" | sed -e 's/<[^>]*>//g' -e 's/^[ \t]*//;s/[ \t]*$//' | tr -s ' \n' ' ' | head -c 4096
 }
 
 dispatch() {
@@ -24,6 +55,12 @@ dispatch() {
   case "$tool_name" in
     list_directory)
       list_directory "$tool_arguments"
+      ;;
+    print_file)
+      print_file "$tool_arguments"
+      ;;
+    fetch_url)
+      fetch_url "$tool_arguments"
       ;;
     *)
       printf 'Unknown tool: %s\n' "$tool_name" >&2
