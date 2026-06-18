@@ -38,7 +38,7 @@ print_file() {
 fetch_url() {
   local url=$(printf '%s' "$1" | jq -r '.url')
   # Fetch, strip HTML tags, collapse spaces, and truncate to avoid blowing out context
-  curl -sL "$url" | sed -e 's/<[^>]*>//g' -e 's/^[ \t]*//;s/[ \t]*$//' | tr -s ' \n' ' ' | head -c 4096
+  curl -sL "$url" | sed -e 's/<[^>]*>//g' -e 's/^[ \t]*//;s/[ \t]*$//' | tr -s ' \n' ' ' | head -c 4096 || true
 }
 
 dispatch() {
